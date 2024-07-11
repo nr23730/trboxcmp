@@ -1,0 +1,14 @@
+LICENSE.md
+README.md
+pyproject.toml
+setup.cfg
+setup.py
+src/trboxcmp/XcmpByteFactory.py
+src/trboxcmp/XcmpOpCodes.py
+src/trboxcmp/__init__.py
+src/trboxcmp/xcmp.py
+src/trboxcmp/xnl.py
+src/trboxcmp.egg-info/PKG-INFO
+src/trboxcmp.egg-info/SOURCES.txt
+src/trboxcmp.egg-info/dependency_links.txt
+src/trboxcmp.egg-info/top_level.txt

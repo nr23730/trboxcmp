@@ -1,4 +1,4 @@
-import numpy as np
+import ctypes
 import warnings
 import socket
 import threading
@@ -43,29 +43,29 @@ class XnlListener():
             in2 = ~in2 ^ 0xFFFFFFFF
 
         # set the iterational vars to be signed int32s, this is to allow intentional overflow and underflow
-        i = np.int32(in1)
-        j = np.int32(in2)
-        sum = np.int32(0)
+        i = ctypes.c_uint32(in1)
+        j = ctypes.c_uint32(in2)
+        sum = ctypes.c_uint32(0)
 
         #this will overflow by design, this is apparently how M does the stuff
         #suppressing the warnings to clean the output up a bit
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', r'overflow encountered')
             for k in range(32):
-                sum += self._delta
+                sum = ctypes.c_uint32(sum.value + self._delta)
                 # TEA (tiny encryption algorithm) - thank you @duggerd for pointing this out
-                i += np.int32(np.int32(j << 4 & 0xfffffff0) + self._key[0] ^ np.int32(j + sum) ^ np.int32(j >> 5 & 0x7ffffff) + self._key[1])
-                j += np.int32(np.int32(i << 4 & 0xfffffff0) + self._key[2] ^ np.int32(i + sum) ^ np.int32(i >> 5 & 0x7ffffff) + self._key[3])
+                i = ctypes.c_uint32(i.value + ctypes.c_uint32(ctypes.c_uint32(ctypes.c_uint32(j.value << 4 & 0xfffffff0).value + self._key[0]).value ^ ctypes.c_uint32(j.value + sum.value).value ^ ctypes.c_uint32(ctypes.c_uint32(j.value >> 5 & 0x7ffffff).value + self._key[1]).value).value)
+                j = ctypes.c_uint32(j.value + ctypes.c_uint32(ctypes.c_uint32(ctypes.c_uint32(i.value << 4 & 0xfffffff0).value + self._key[2]).value ^ ctypes.c_uint32(i.value + sum.value).value ^ ctypes.c_uint32(ctypes.c_uint32(i.value >> 5 & 0x7ffffff).value + self._key[3]).value).value)
 
         #two's complement -> hex
-        if (i < 0):
-            i = ~i ^ 0xFFFFFFFF
-        if (j < 0):
-            j = ~j ^ 0xFFFFFFFF
+        if (i.value < 0):
+            i = ctypes.c_uint32(~i.value ^ 0xFFFFFFFF)
+        if (j.value < 0):
+            j = ctypes.c_uint32(~j ^ 0xFFFFFFFF)
 
         # convert numpy back to python int
-        iOut = i.item()
-        jOut = j.item()
+        iOut = i.value
+        jOut = j.value
         # convert int to bytes to pack back into the response
         result = iOut.to_bytes(4, "big") + jOut.to_bytes(4, "big")
         return result

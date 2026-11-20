@@ -32,6 +32,25 @@ Most of the basic data services can be set up as such:
 
 The true keys and delta are property of Motorola Solutions and will not be included with this library.
 
+## Received messages
+
+Whatever the radio sends is handed to the callback you pass in. A call control
+broadcast (`0xb41e`) says who is talking:
+
+    {'type': 2, 'payload': {'status': 1, 'statusText': 'call decoded',
+                            'rid': 1001, 'tgid': 1, 'alias': 'DEMO 1-1'}}
+
+* `status` / `statusText` - what happened to the call, see `XcmpCallStatus`
+* `rid` - radio id of the sender
+* `tgid` - talkgroup id
+* `alias` - name of the sender as it is programmed in the codeplug
+
+The alias is a null padded UTF-16 field at the end of the message and most of
+the status updates (call end, hang time) do not carry one, so `alias` is simply
+missing there. `Xcmp.decodeAlias()` decodes the field on its own and returns
+`""` when there is nothing to read; `Xcmp.CALL_ALIAS_POS` and
+`Xcmp.CALL_ALIAS_ENDIAN` move it if your firmware puts the name somewhere else.
+
 ## Documentation
 
     listener.close()

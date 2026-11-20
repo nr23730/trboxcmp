@@ -1,0 +1,54 @@
+# --- local secrets ----------------------------------------------------------
+# XCMP key material, delta and kid. Never commit this; the real keys are
+# property of Motorola Solutions and are unique per codeplug.
+keys.json
+*.key
+secrets*.json
+
+# --- radio inventory --------------------------------------------------------
+# --names files map real radio ids to real names ("who is who" on your fleet).
+names.json
+radios.json
+
+# --- captures and logs ------------------------------------------------------
+# Everything below is a dump of what a real radio put on the wire: radio ids,
+# aliases, serial numbers, model numbers and firmware revisions.
+*.log
+*.pcap
+*.pcapng
+*.cap
+*.csv
+
+# --- Python build artifacts -------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+build/
+dist/
+.eggs/
+MANIFEST
+
+# --- virtualenvs ------------------------------------------------------------
+.venv/
+venv/
+env/
+.python-version
+
+# --- test and scratch -------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+scratch/
+tmp/
+
+# --- editors and OS ---------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

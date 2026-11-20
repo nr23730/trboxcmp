@@ -29,6 +29,8 @@ class XnlListener():
         self._flag = 0
         self._xnlAddress = b'\x99\x99' # init address with invalid value
         self._callback = callback
+        #set by close() so the listener thread can leave its recv() cleanly
+        self._stop = threading.Event()
 
     def _generateKey(self, input):
         # convert hex to bin to int (don't ask why, it's the only way that works)
@@ -132,15 +134,31 @@ class XnlListener():
 
     def close(self):
         logging.info("XNL: Closing connection, bye!")
-        self._process.terminate()
+        #threading.Thread has no terminate(): tell the loop to stop and then shut
+        #the socket down so a blocked recv() wakes up and raises.
+        self._stop.set()
+        try:
+            self._sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         self._sock.close()
+        #wait for the listener thread, it must not outlive the interpreter
+        if (self._process.is_alive()):
+            self._process.join(2)
 
     def _listen_forever(self):
         self._process.start()
 
     def _listener_loop(self):
-        while True:
-            data = self._sock.recv(1024)
+        while (not self._stop.is_set()):
+            try:
+                data = self._sock.recv(1024)
+            except OSError:
+                #close() closed the socket, or the radio went away
+                return
+            if (not data):
+                #the radio closed the connection
+                return
             logging.debug("XNL: Received a message {}".format(data))
             opCode = self._getOpCode(data)
             messageId = self._getMessageId(data)
@@ -148,7 +166,11 @@ class XnlListener():
             if (opCode == XnlOpCodes.XNL_DATA):
                 #strip XNL header and send xcmp message to the callback
                 self._callback(data[14:])
-                self._sock.send(b'\x00\x0c\x00\x0c\x01' + flag + b'\x00\x06' + self._xnlAddress + messageId + b'\x00\x00')
+                try:
+                    self._sock.send(b'\x00\x0c\x00\x0c\x01' + flag + b'\x00\x06' + self._xnlAddress + messageId + b'\x00\x00')
+                except OSError:
+                    #nothing left to ack, the loop exits on the next recv()
+                    pass
 
     def _getOpCode(self, dataIn):
         return dataIn[2:4]

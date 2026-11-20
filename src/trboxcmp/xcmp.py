@@ -4,7 +4,7 @@ import time
 import binascii
 from trboxcmp.xnl import XnlListener
 from trboxcmp.XcmpByteFactory import XcmpByteFactory
-from trboxcmp.XcmpOpCodes import XcmpOpCodes, XcmpConsts
+from trboxcmp.XcmpOpCodes import XcmpOpCodes, XcmpConsts, XcmpCallStatus
 
 class Xcmp:
     # op defs for callback
@@ -15,6 +15,15 @@ class Xcmp:
     OP_BATTLVL = 5
     OP_DISPTXT = 6
 
+    # byte offsets inside a CALL_CTRL_BCAST (0xb41e) message
+    CALL_STATUS_POS = 3
+    CALL_RID_POS = 6
+    CALL_TGID_POS = 12
+    # one byte of padding/flag after the tgid, then the sender's alias
+    CALL_ALIAS_POS = 16
+    #byte order of the UTF-16 alias field, "little" or "big"
+    CALL_ALIAS_ENDIAN = "little"
+
     def __init__(self, keys, delta, kid, callback, ip="192.168.10.1", port=8002):
         self._xnl = XnlListener(keys, delta, kid, self.onXcmpIn, ip, port)
         self._callback = callback
@@ -23,6 +32,46 @@ class Xcmp:
 
     def sendRaw(self, bytes):
         self._xnl.sendXcmp(bytes)
+
+    @classmethod
+    def decodeAlias(cls, data, pos = None, endian = None):
+        '''
+        Pull the sender's alias (the radio name, e.g. "DEMO 1-1") out of the tail
+        of a CALL_CTRL_BCAST message.
+
+        The name rides at the end of the frame as null padded UTF-16:
+
+            ... 00 00 01 | 00 | 44 00 45 00 4d 00 4f 00 20 00 31 00 2d 00 31 | 00 00
+                tgid = 1     ?    B     V     ' '   7     -     5
+
+        Little endian, one byte after the talkgroup id, which lines the field up
+        with the end of the 32 byte frame exactly. A code unit only counts as
+        text while its high byte is 0x00 and its low byte is printable, so the
+        zero padding (and any other number that happens to sit there) ends the
+        name instead of turning into mojibake. That means names outside of
+        Latin-1 are dropped rather than guessed at.
+
+        Radios that use the big endian layout one byte earlier need
+        CALL_ALIAS_POS = 15 and CALL_ALIAS_ENDIAN = "big".
+        Returns "" when the message carries no alias, which is the case for most
+        of the call status updates.
+        '''
+        if (pos is None):
+            pos = cls.CALL_ALIAS_POS
+        if (endian is None):
+            endian = cls.CALL_ALIAS_ENDIAN
+
+        chars = []
+        for i in range(pos, len(data) - 1, 2):
+            if (endian == "big"):
+                high, low = data[i], data[i + 1]
+            else:
+                low, high = data[i], data[i + 1]
+            #high byte set or a control byte: end of the name / start of padding
+            if (high != 0 or low < 0x20):
+                break
+            chars.append(chr(low))
+        return "".join(chars)
 
     def onXcmpIn(self, data):
         logging.debug("XCMP: Incoming message: {}".format(data))
@@ -47,6 +96,7 @@ class Xcmp:
         elif (opCode == XcmpOpCodes.CALL_CTRL_BCAST):
             #msg
             #b4 1e 06 01 01 03 00 7b 96 00 00 03 00 0c 3b
+            #b4 1e 06 01 01 03 01 08 4f 00 00 03 00 00 01 00 42 00 56 00 20 00 37 00 2d 00 35 00 00 00 00 00
             #first 2 - opcode
             #2-4 - 06 01 - call decoded
             #      06 02 - call in progress
@@ -54,13 +104,22 @@ class Xcmp:
             #      06 09 - call decoded enc valid key
             #      06 07 - hang time
             #      06 03 - call end
-            #6-8 - rid
-            #12-14 - tgid
+            #6-9 - rid (id of the radio that is talking)
+            #12-15 - tgid
+            #16.. - alias of the sender, UTF-16, null padded ("DEMO 1-1")
             result['type'] = self.OP_CALL_INFO
 
-            payload['status'] = int.from_bytes(data[3:4], "big")
-            payload['rid'] = int.from_bytes(data[6:9], "big")
-            payload['tgid'] = int.from_bytes(data[12:15], "big")
+            status = int.from_bytes(data[3:4], "big")
+            payload['status'] = status
+            payload['statusText'] = XcmpCallStatus.text(status)
+            #short frames (call end, hang time) stop after the tgid
+            if (len(data) >= self.CALL_RID_POS + 3):
+                payload['rid'] = int.from_bytes(data[self.CALL_RID_POS:self.CALL_RID_POS + 3], "big")
+            if (len(data) >= self.CALL_TGID_POS + 3):
+                payload['tgid'] = int.from_bytes(data[self.CALL_TGID_POS:self.CALL_TGID_POS + 3], "big")
+            alias = self.decodeAlias(data)
+            if (alias):
+                payload['alias'] = alias
 
         elif (opCode == XcmpOpCodes.RADIOSTATUS_RES):
             result['type'] = self.OP_RADIOSTATUS

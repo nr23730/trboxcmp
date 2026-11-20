@@ -35,8 +35,8 @@ class XcmpOpCodes():
     MICCTRL_RES = b'\x84\x0e'
     MICCTRL_BCAST = b'\xb4\x0e'
 
-    BATTLVL_BCAST = b'\x04\x10'
-    BATTLVL_BCAST = b'\x84\x10'
+    BATTLVL_REQ = b'\x04\x10'
+    BATTLVL_RES = b'\x84\x10'
     BATTLVL_BCAST = b'\xb4\x10'
 
     BRIGHTNESS_REQ = b'\x04\x11'
@@ -56,6 +56,33 @@ class XcmpOpCodes():
     KEY_REQ = b'\x04\x15'
     KEY_RES = b'\x08\x15'
     KEY_BCAST = b'\xb4\x15'
+
+class XcmpCallStatus():
+    '''
+    Status byte (byte 3) of a CALL_CTRL_BCAST (0xb41e) message.
+
+    b4 1e 06 <status> ...
+    '''
+    DECODED = 0x01            # incoming call audio decoded
+    IN_PROGRESS = 0x02        # call is on the air / being received
+    END = 0x03                # call ended
+    HANG_TIME = 0x07          # hang time running
+    DECODED_CLEAR = 0x08      # call decoded, clear (not encrypted)
+    DECODED_ENC_VALID_KEY = 0x09  # call decoded, encrypted, valid key
+
+    TEXT = {
+        DECODED: "call decoded",
+        IN_PROGRESS: "call in progress",
+        END: "call end",
+        HANG_TIME: "hang time",
+        DECODED_CLEAR: "call decoded (clear)",
+        DECODED_ENC_VALID_KEY: "call decoded (encrypted, valid key)",
+    }
+
+    @classmethod
+    def text(cls, status):
+        return cls.TEXT.get(status, "unknown call status {}".format(status))
+
 
 class XcmpConsts():
     # physical user input button opcode defs
